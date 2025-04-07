@@ -231,21 +231,96 @@ def generate_chart():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+def get_alpaca_trader():
+    """Helper function to get an instance of AlpacaOptionsTrader"""
+    # Get API credentials from environment variables
+    api_key = os.environ.get('ALPACA_API_KEY')
+    api_secret = os.environ.get('ALPACA_API_SECRET')
+    
+    if api_key and api_secret:
+        from trading_integration import AlpacaOptionsTrader
+        return AlpacaOptionsTrader(api_key=api_key, api_secret=api_secret)
+    return None
+
 @app.route('/api/trade', methods=['POST'])
 def execute_trade():
-    # This would connect to a trading API like Alpaca
-    # For now, we'll just return a mock response
     data = request.json
     
-    # In a real implementation, this would validate the trade parameters
-    # and execute the trade through the broker API
+    # Get trader instance
+    trader = get_alpaca_trader()
     
-    return jsonify({
-        'status': 'success',
-        'message': 'Trade simulated successfully',
-        'trade_details': data,
-        'order_id': 'mock-order-' + datetime.now().strftime('%Y%m%d%H%M%S')
-    })
+    # Check if API credentials are set
+    if trader:
+        try:
+            # Execute the trade
+            result = trader.execute_strangle(data)
+            return jsonify(result)
+            
+        except Exception as e:
+            return jsonify({
+                'status': 'error',
+                'message': f'Error executing trade: {str(e)}'
+            })
+    else:
+        # If no API credentials are set, return a mock response
+        return jsonify({
+            'status': 'success',
+            'message': 'Trade simulated successfully (API credentials not set)',
+            'trade_details': data,
+            'order_id': 'mock-order-' + datetime.now().strftime('%Y%m%d%H%M%S')
+        })
+
+@app.route('/api/orders', methods=['GET'])
+def get_orders():
+    """Get all orders from Alpaca"""
+    trader = get_alpaca_trader()
+    
+    if trader:
+        try:
+            # Get orders from Alpaca
+            orders = trader.get_orders()
+            return jsonify(orders)
+        except Exception as e:
+            return jsonify({
+                'status': 'error',
+                'message': f'Error retrieving orders: {str(e)}'
+            })
+    else:
+        # Return mock data if no API credentials
+        return jsonify({
+            'status': 'success',
+            'orders': [
+                {
+                    'id': 'mock-order-1',
+                    'symbol': 'AAPL',
+                    'strategy': 'strangle',
+                    'status': 'filled',
+                    'created_at': (datetime.now() - timedelta(days=1)).isoformat(),
+                    'filled_at': datetime.now().isoformat(),
+                    'legs': [
+                        {'option_type': 'call', 'strike': 180, 'expiration': '2025-04-17'},
+                        {'option_type': 'put', 'strike': 160, 'expiration': '2025-04-17'}
+                    ],
+                    'quantity': 1,
+                    'side': 'buy',
+                    'type': 'market'
+                },
+                {
+                    'id': 'mock-order-2',
+                    'symbol': 'MSFT',
+                    'strategy': 'strangle',
+                    'status': 'new',
+                    'created_at': datetime.now().isoformat(),
+                    'legs': [
+                        {'option_type': 'call', 'strike': 420, 'expiration': '2025-04-25'},
+                        {'option_type': 'put', 'strike': 380, 'expiration': '2025-04-25'}
+                    ],
+                    'quantity': 2,
+                    'side': 'buy',
+                    'type': 'limit'
+                }
+            ]
+        })
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=58236, debug=True)

@@ -7,9 +7,51 @@ document.addEventListener('DOMContentLoaded', function() {
     const orderTypeSelect = document.getElementById('orderType');
     const limitPriceGroup = document.getElementById('limitPriceGroup');
     const executeTradeBtn = document.getElementById('executeTradeBtn');
+    const ordersNavLink = document.getElementById('ordersNavLink');
+    const scannerSection = document.getElementById('scannerSection');
+    const ordersSection = document.getElementById('ordersSection');
+    const refreshOrdersBtn = document.getElementById('refreshOrdersBtn');
     
     // Current selected trade data
     let selectedTrade = null;
+    
+    // Navigation between scanner and orders
+    ordersNavLink.addEventListener('click', function(e) {
+        e.preventDefault();
+        
+        if (ordersSection.classList.contains('d-none')) {
+            // Show orders section, hide scanner section
+            scannerSection.classList.add('d-none');
+            ordersSection.classList.remove('d-none');
+            
+            // Update active nav link
+            document.querySelector('.nav-link.active').classList.remove('active');
+            this.classList.add('active');
+            
+            // Load orders
+            loadOrders();
+        }
+    });
+    
+    // Return to scanner when clicking Scanner nav link
+    document.querySelector('.nav-item:first-child .nav-link').addEventListener('click', function(e) {
+        e.preventDefault();
+        
+        if (scannerSection.classList.contains('d-none')) {
+            // Show scanner section, hide orders section
+            ordersSection.classList.add('d-none');
+            scannerSection.classList.remove('d-none');
+            
+            // Update active nav link
+            document.querySelector('.nav-link.active').classList.remove('active');
+            this.classList.add('active');
+        }
+    });
+    
+    // Refresh orders button
+    refreshOrdersBtn.addEventListener('click', function() {
+        loadOrders();
+    });
     
     // Initialize tooltips
     const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
@@ -187,6 +229,140 @@ document.addEventListener('DOMContentLoaded', function() {
         .catch(error => {
             console.error('Error loading chart:', error);
         });
+    }
+    
+    // Load orders from API
+    function loadOrders() {
+        const ordersTable = document.getElementById('ordersTable').querySelector('tbody');
+        
+        // Show loading indicator
+        ordersTable.innerHTML = `
+            <tr>
+                <td colspan="9" class="text-center">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2">Loading orders...</p>
+                </td>
+            </tr>
+        `;
+        
+        // Fetch orders from API
+        fetch('/api/orders')
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success' && data.orders && data.orders.length > 0) {
+                    // Clear loading indicator
+                    ordersTable.innerHTML = '';
+                    
+                    // Add orders to table
+                    data.orders.forEach(order => {
+                        const row = document.createElement('tr');
+                        
+                        // Format date
+                        const createdDate = new Date(order.created_at);
+                        const formattedDate = createdDate.toLocaleString();
+                        
+                        // Format legs
+                        const legs = order.legs.map(leg => 
+                            `${leg.option_type.toUpperCase()} ${leg.strike} (${leg.expiration})`
+                        ).join('<br>');
+                        
+                        // Status badge
+                        let statusBadge = '';
+                        switch(order.status) {
+                            case 'filled':
+                                statusBadge = '<span class="badge bg-success">Filled</span>';
+                                break;
+                            case 'partially_filled':
+                                statusBadge = '<span class="badge bg-info">Partially Filled</span>';
+                                break;
+                            case 'new':
+                                statusBadge = '<span class="badge bg-primary">New</span>';
+                                break;
+                            case 'cancelled':
+                                statusBadge = '<span class="badge bg-secondary">Cancelled</span>';
+                                break;
+                            case 'rejected':
+                                statusBadge = '<span class="badge bg-danger">Rejected</span>';
+                                break;
+                            default:
+                                statusBadge = `<span class="badge bg-secondary">${order.status}</span>`;
+                        }
+                        
+                        row.innerHTML = `
+                            <td>${order.id}</td>
+                            <td>${order.symbol}</td>
+                            <td>${order.strategy}</td>
+                            <td>${statusBadge}</td>
+                            <td>${formattedDate}</td>
+                            <td>${legs}</td>
+                            <td>${order.quantity}</td>
+                            <td>${order.type.toUpperCase()}</td>
+                            <td>
+                                <button class="btn btn-sm btn-primary view-chart-order" data-symbol="${order.symbol}">
+                                    <i class="bi bi-graph-up"></i>
+                                </button>
+                                ${order.status === 'new' ? 
+                                    `<button class="btn btn-sm btn-danger cancel-order" data-order-id="${order.id}">
+                                        <i class="bi bi-x-circle"></i>
+                                    </button>` : ''}
+                            </td>
+                        `;
+                        
+                        ordersTable.appendChild(row);
+                    });
+                    
+                    // Add event listeners to view chart buttons
+                    document.querySelectorAll('.view-chart-order').forEach(button => {
+                        button.addEventListener('click', function() {
+                            const symbol = this.getAttribute('data-symbol');
+                            loadChart(symbol);
+                            
+                            // Switch to scanner view to see the chart
+                            ordersSection.classList.add('d-none');
+                            scannerSection.classList.remove('d-none');
+                            
+                            // Update active nav link
+                            document.querySelector('.nav-link.active').classList.remove('active');
+                            document.querySelector('.nav-item:first-child .nav-link').classList.add('active');
+                        });
+                    });
+                    
+                    // Add event listeners to cancel buttons
+                    document.querySelectorAll('.cancel-order').forEach(button => {
+                        button.addEventListener('click', function() {
+                            const orderId = this.getAttribute('data-order-id');
+                            if (confirm(`Are you sure you want to cancel order ${orderId}?`)) {
+                                alert('Order cancellation would be implemented here');
+                                // In a real implementation, this would call an API endpoint to cancel the order
+                            }
+                        });
+                    });
+                    
+                } else {
+                    // No orders or error
+                    ordersTable.innerHTML = `
+                        <tr>
+                            <td colspan="9" class="text-center">
+                                ${data.status === 'error' ? 
+                                    `<div class="alert alert-danger">${data.message}</div>` : 
+                                    'No orders found'}
+                            </td>
+                        </tr>
+                    `;
+                }
+            })
+            .catch(error => {
+                console.error('Error loading orders:', error);
+                ordersTable.innerHTML = `
+                    <tr>
+                        <td colspan="9" class="text-center">
+                            <div class="alert alert-danger">Error loading orders. Please try again.</div>
+                        </td>
+                    </tr>
+                `;
+            });
     }
     
     // Execute trade button handler

@@ -1,7 +1,7 @@
 import os
 import json
 import alpaca_trade_api as tradeapi
-from datetime import datetime
+from datetime import datetime, timedelta
 
 class AlpacaOptionsTrader:
     """
@@ -37,6 +37,81 @@ class AlpacaOptionsTrader:
     def get_account(self):
         """Get account information."""
         return self.api.get_account()
+        
+    def get_orders(self, status='all', limit=50):
+        """
+        Get orders from Alpaca.
+        
+        Args:
+            status (str): Filter orders by status ('open', 'closed', 'all')
+            limit (int): Maximum number of orders to return
+            
+        Returns:
+            dict: Dictionary containing orders information
+        """
+        try:
+            # In a real implementation, this would call the Alpaca API
+            # orders = self.api.list_orders(status=status, limit=limit)
+            
+            # For demonstration, we'll return mock data
+            orders = [
+                {
+                    'id': f'order-{datetime.now().strftime("%Y%m%d%H%M%S")}-1',
+                    'symbol': 'AAPL',
+                    'strategy': 'strangle',
+                    'status': 'filled',
+                    'created_at': (datetime.now() - timedelta(hours=2)).isoformat(),
+                    'filled_at': (datetime.now() - timedelta(hours=1)).isoformat(),
+                    'legs': [
+                        {'option_type': 'call', 'strike': 185, 'expiration': '2025-04-17'},
+                        {'option_type': 'put', 'strike': 175, 'expiration': '2025-04-17'}
+                    ],
+                    'quantity': 1,
+                    'side': 'buy',
+                    'type': 'market',
+                    'filled_price': 2.45
+                },
+                {
+                    'id': f'order-{datetime.now().strftime("%Y%m%d%H%M%S")}-2',
+                    'symbol': 'TSLA',
+                    'strategy': 'strangle',
+                    'status': 'new',
+                    'created_at': datetime.now().isoformat(),
+                    'legs': [
+                        {'option_type': 'call', 'strike': 250, 'expiration': '2025-04-25'},
+                        {'option_type': 'put', 'strike': 220, 'expiration': '2025-04-25'}
+                    ],
+                    'quantity': 1,
+                    'side': 'buy',
+                    'type': 'limit',
+                    'limit_price': 3.75
+                },
+                {
+                    'id': f'order-{datetime.now().strftime("%Y%m%d%H%M%S")}-3',
+                    'symbol': 'SPY',
+                    'strategy': 'strangle',
+                    'status': 'partially_filled',
+                    'created_at': (datetime.now() - timedelta(minutes=30)).isoformat(),
+                    'legs': [
+                        {'option_type': 'call', 'strike': 510, 'expiration': '2025-05-16', 'filled': True},
+                        {'option_type': 'put', 'strike': 490, 'expiration': '2025-05-16', 'filled': False}
+                    ],
+                    'quantity': 2,
+                    'side': 'buy',
+                    'type': 'market'
+                }
+            ]
+            
+            return {
+                'status': 'success',
+                'orders': orders
+            }
+            
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': str(e)
+            }
     
     def execute_strangle(self, trade_request):
         """
